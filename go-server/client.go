@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"math/rand"
 	"net/http"
 	"time"
 
@@ -92,8 +93,18 @@ func (c *Client) writePump() {
 			if err != nil {
 				return
 			}
-
-			stonks, _ := json.Marshal(stocks)
+			var stronk []stock
+			for _, element := range stocks {
+				stronk = append(stronk, stock{
+					ID:       element.ID,
+					Name:     element.Name,
+					Symbol:   element.Symbol,
+					Exchange: element.Exchange,
+					Price:    element.Price + rand.Float64(),
+				})
+			}
+			log.Println(stronk)
+			stonks, _ := json.Marshal(stronk)
 			w.Write(stonks)
 
 			if err := w.Close(); err != nil {
@@ -109,7 +120,24 @@ func (c *Client) writePump() {
 				log.Printf("Error: %s, while sending message to %s", err, c.conn.RemoteAddr())
 				return
 			}
-			stonks, _ := json.Marshal(stocks)
+			var stronk []stock
+			for _, element := range stocks {
+				var change float64;
+				if rand.Float64() > 0.5 {
+					change = rand.Float64()
+				} else {
+					change = -1 * rand.Float64()
+				}
+				stronk = append(stronk, stock{
+					ID:       element.ID,
+					Name:     element.Name,
+					Symbol:   element.Symbol,
+					Exchange: element.Exchange,
+					Price:    element.Price + change,
+				})
+			}
+			log.Println(stronk)
+			stonks, _ := json.Marshal(stronk)
 			w.Write(stonks)
 		}
 	}
@@ -123,10 +151,10 @@ func serveWs(exch *Exchange, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.Header.Get("id")
-	if id == "" {
-		log.Printf("Client did not send id. IP: %s", conn.RemoteAddr())
-		conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(1008, "You did not send an ID."))
-	}
+	// if id == "" {
+	// 	log.Printf("Client did not send id. IP: %s", conn.RemoteAddr())
+	// 	conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(1008, "You did not send an ID."))
+	// }
 	client := &Client{exch: exch, conn: conn, send: make(chan []byte, 256), id: id}
 	client.exch.register <- client
 
