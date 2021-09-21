@@ -8,7 +8,6 @@ import (
 
 // Stock structure
 type stock struct {
-	MongoID      string  `json:"_id"` // Mongo ID
 	ID       string  `json:"id"`
 	Name     string  `json:"name"`
 	Symbol   string  `json:"symbol"`

@@ -9,7 +9,6 @@ import (
 
 	"github.com/gorilla/websocket"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 const (
@@ -127,7 +126,7 @@ func (c *Client) writePump() {
 				}
 				stocks = append(stocks, result)
 			}
-			var updatedStocks []stock;
+			var updatedStocks []stock
 			for _, element := range stocks {
 				var change float64
 				if rand.Float64() > 0.5 {
@@ -142,8 +141,8 @@ func (c *Client) writePump() {
 					Exchange: element.Exchange,
 					Price:    element.Price + change,
 				}
-				id, _ := primitive.ObjectIDFromHex(element.MongoID)
-				insertResult, err := collection.UpdateOne(CTX, bson.M{"_id": id}, bson.M{ "$set": bson.M{"Price": currentStock.Price }})
+				log.Println(element)
+				insertResult, err := collection.UpdateOne(CTX, bson.M{"id": element.ID}, bson.M{"$set": bson.M{"price": currentStock.Price}})
 				if err != nil {
 					log.Fatal(err)
 				}
