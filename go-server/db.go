@@ -12,6 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// Variables with a capital letter are considered publc in go and are available in other files/packages.
+// @see https://stackoverflow.com/questions/58365838/how-to-reuse-mongodb-connection-in-go#comment116916095_59119371
 var CNX = Connection()
 var CTX context.Context;
 func Connection() *mongo.Client {

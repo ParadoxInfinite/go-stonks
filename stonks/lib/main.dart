@@ -1,32 +1,34 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter/material.dart';
 
 import 'models/stock.dart';
 
-void main() => runApp(const MyApp());
+Future main() async {
+  await dotenv.load(fileName: '.env');
+  runApp(const Stonks());
+}
 
-const serverAddress = 'ws://192.168.88.58';
-
-class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+class Stonks extends StatelessWidget {
+  const Stonks({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     const title = 'Stonks';
     return const MaterialApp(
       title: title,
-      home: MyHomePage(
+      home: StonksPage(
         title: title,
       ),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({
+class StonksPage extends StatefulWidget {
+  const StonksPage({
     Key? key,
     required this.title,
   }) : super(key: key);
@@ -34,12 +36,13 @@ class MyHomePage extends StatefulWidget {
   final String title;
 
   @override
-  _MyHomePageState createState() => _MyHomePageState();
+  _StonksPageState createState() => _StonksPageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+class _StonksPageState extends State<StonksPage> {
   final _channel = WebSocketChannel.connect(
-    Uri.parse(serverAddress),
+    Uri.parse(
+        '${dotenv.get('SECURE') == 'true' ? dotenv.get('SECURE_PROTOCOL') : dotenv.get('PROTOCOL')}://${dotenv.get('HOST')}'),
   );
 
   @override
@@ -49,6 +52,8 @@ class _MyHomePageState extends State<MyHomePage> {
         title: Text(widget.title),
       ),
       body: StreamBuilder(
+        // To only listen to a stream, and not following the bad documentation,
+        // @see https://api.flutter.dev/flutter/dart-async/Stream/asBroadcastStream.html
         stream: _channel.stream.asBroadcastStream(),
         builder: (context, AsyncSnapshot snapshot) {
           if (snapshot.hasError) {
@@ -56,18 +61,20 @@ class _MyHomePageState extends State<MyHomePage> {
           }
 
           if (snapshot.connectionState == ConnectionState.waiting) {
+            // TODO: Either make a custom progress indicator, or center the default one.
             return const CircularProgressIndicator();
           }
 
           var json = jsonDecode(snapshot.data);
           List<Stock> stocks = [];
           // The JSON data is an array, so the decoded json is a list.
-          // We will do the loop through this list to parse objects.
+          // We will do the loop through this list to parse objects into the model.
           if (json != null) {
             json.forEach((element) {
               stocks.add(Stock.fromJson(element));
             });
           }
+          // separated so we can add separatorBuilder to add a divider between items.
           return ListView.separated(
             itemCount: stocks.length,
             separatorBuilder: (BuildContext context, int index) =>
@@ -84,11 +91,13 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   void dispose() {
+    // Closing whenever 'activity' dies.
     _channel.sink.close();
     super.dispose();
   }
 }
 
+// Takes a Stock modeled object and returns a ListTile for that object.
 class StockTile extends StatelessWidget {
   final Stock stock;
 

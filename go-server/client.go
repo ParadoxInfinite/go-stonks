@@ -78,6 +78,7 @@ func (c *Client) writePump() {
 	tick := time.NewTicker(writeWait)
 	defer func() {
 		ticker.Stop()
+		tick.Stop()
 		c.conn.Close()
 	}()
 	for {
@@ -163,6 +164,7 @@ func serveWs(exch *Exchange, w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		return
 	}
+	// TODO: add some sort of authentication and display stocks only for that user.
 	id := r.Header.Get("id")
 	// if id == "" {
 	// 	log.Printf("Client did not send id. IP: %s", conn.RemoteAddr())
