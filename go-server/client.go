@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 const (
@@ -93,19 +94,8 @@ func (c *Client) writePump() {
 			if err != nil {
 				return
 			}
-			var stronk []stock
-			for _, element := range stocks {
-				stronk = append(stronk, stock{
-					ID:       element.ID,
-					Name:     element.Name,
-					Symbol:   element.Symbol,
-					Exchange: element.Exchange,
-					Price:    element.Price + rand.Float64(),
-				})
-			}
-			log.Println(stronk)
-			stonks, _ := json.Marshal(stronk)
-			w.Write(stonks)
+			message, _ := json.Marshal("Currently we only stream stocks data")
+			w.Write(message)
 
 			if err := w.Close(); err != nil {
 				return
@@ -120,24 +110,47 @@ func (c *Client) writePump() {
 				log.Printf("Error: %s, while sending message to %s", err, c.conn.RemoteAddr())
 				return
 			}
-			var stronk []stock
+			var stocks []stock
+			collection := CNX.Database("go-stonks").Collection("stonks")
+			collection.Find(CTX, bson.D{})
+			cur, err := collection.Find(CTX, bson.D{})
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer cur.Close(CTX)
+			for cur.Next(CTX) {
+				var result stock
+				err := cur.Decode(&result)
+				if err != nil {
+					log.Fatal(err)
+				}
+				stocks = append(stocks, result)
+			}
+			var updatedStocks []stock
 			for _, element := range stocks {
-				var change float64;
+				var change float64
 				if rand.Float64() > 0.5 {
 					change = rand.Float64()
 				} else {
 					change = -1 * rand.Float64()
 				}
-				stronk = append(stronk, stock{
+				currentStock := stock{
 					ID:       element.ID,
 					Name:     element.Name,
 					Symbol:   element.Symbol,
 					Exchange: element.Exchange,
 					Price:    element.Price + change,
-				})
+				}
+				log.Println(element)
+				insertResult, err := collection.UpdateOne(CTX, bson.M{"id": element.ID}, bson.M{"$set": bson.M{"price": currentStock.Price}})
+				if err != nil {
+					log.Fatal(err)
+				}
+				log.Printf("Successfully updated %s stock! Result: %d", currentStock.Name, insertResult.ModifiedCount)
+				updatedStocks = append(updatedStocks, currentStock)
 			}
-			log.Println(stronk)
-			stonks, _ := json.Marshal(stronk)
+			log.Println(updatedStocks)
+			stonks, _ := json.Marshal(updatedStocks)
 			w.Write(stonks)
 		}
 	}

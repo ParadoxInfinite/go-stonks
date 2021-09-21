@@ -16,8 +16,8 @@ func main() {
 		serveWs(exch, w, r)
 	})
 	log.Printf("Listening to websocket requests at %s", *addr)
-	err := http.ListenAndServe(*addr, nil)
-	if err != nil {
-		log.Fatal("Error in ListenAndServe: ", err)
+	e := http.ListenAndServe(*addr, nil)
+	if e != nil {
+		log.Fatal("Error in ListenAndServe: ", e)
 	}
 }
