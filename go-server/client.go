@@ -5,10 +5,14 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"time"
 
+	"github.com/golang-jwt/jwt"
 	"github.com/gorilla/websocket"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -41,6 +45,23 @@ type Client struct {
 	send chan []byte
 
 	id string
+}
+
+type User struct {
+	Name      string     `json:"name"`
+	Phone     string     `json:"phone"`
+	Username  string     `json:"username"`
+	Password  string     `json:"password"`
+	Exchanges []Exchange `json:"exchanges"`
+	Stocks    []stock    `json:"stocks"`
+}
+
+type AuthRequest struct {
+	Type     string `json:"type"`
+	Name     string `json:"name"`
+	Phone    string `json:"phone"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 // readPump pumps messages from the websocket connection to the exchange.
@@ -177,4 +198,99 @@ func serveWs(exch *Exchange, w http.ResponseWriter, r *http.Request) {
 	// new goroutines.
 	go client.writePump()
 	go client.readPump()
+}
+
+func serveAuth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		response, err := json.Marshal(bson.M{"success": false, "message": "Unsupported request method."})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(response)
+	}
+	var req AuthRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	collection := CNX.Database("go-stonks").Collection("users")
+
+	if req.Type == "REGISTER" {
+		orQuery := []bson.M{}
+		orQuery = append(orQuery, bson.M{"phone": req.Phone}, bson.M{"username": req.Username})
+		findQuery := bson.M{"$or": orQuery}
+		var existingUser User
+		err := collection.FindOne(CTX, findQuery).Decode(&existingUser)
+		if err != nil {
+			if err == mongo.ErrNoDocuments {
+				passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+				if err != nil {
+					log.Println(err)
+				}
+				exchanges := []string{
+					"STNKS", // Default exchange assigned to a new user.
+				}
+				stocks := []string{
+					"CPP",
+					"TS",
+				}
+				collection.InsertOne(CTX, bson.M{
+					"username":  req.Username,
+					"phone":     req.Phone,
+					"name":      req.Name,
+					"password":  string(passwordHash),
+					"exchanges": exchanges,
+					"stocks":    stocks,
+				})
+			}
+		}
+	}
+
+	if req.Type == "LOGIN" {
+		var existingUser User
+		passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			log.Println(err)
+		}
+		e := collection.FindOne(CTX, bson.M{"username": req.Username, "password": req.Password}).Decode(&existingUser)
+		if e != nil {
+			if e == mongo.ErrNoDocuments {
+				http.Error(w, e.Error(), http.StatusUnauthorized)
+			}
+		}
+		if existingUser.Username == req.Username && existingUser.Password == string(passwordHash) {
+			secretKey := []byte(os.Getenv("SERVER_SECRET"))
+
+			// Create the Claims
+			claims := &jwt.StandardClaims{
+				ExpiresAt: 15000,
+				Issuer:    "stonks",
+			}
+
+			token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+			signedToken, err := token.SignedString(secretKey)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			response, err := json.Marshal(bson.M{"success": true, "token": signedToken})
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(response)
+			return
+		}
+	}
+	response, err := json.Marshal(bson.M{"success": false, "message": "Unknown request type."})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(response)
 }

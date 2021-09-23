@@ -12,7 +12,10 @@ func main() {
 	flag.Parse()
 	exch := newExchange()
 	go exch.run()
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/auth", func(w http.ResponseWriter, r *http.Request) {
+		serveAuth(w, r)
+	})
+	http.HandleFunc("/prices", func(w http.ResponseWriter, r *http.Request) {
 		serveWs(exch, w, r)
 	})
 	log.Printf("Listening to websocket requests at %s", *addr)
